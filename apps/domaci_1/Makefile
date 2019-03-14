@@ -2,7 +2,7 @@
 CC = gcc
 
 #GCC Flags
-CFLAGS = -m32 -nostdlib -nostdinc -e main -Ttext=100 -static -fno-builtin
+CFLAGS = -m32 -g -nostdlib -nostdinc -e main -Ttext=100 -static -fno-builtin
 
 #Replaces standard includes with linux 0.01 include, includes 
 INCLUDES = -I../../include -I../utils -I scan 

@@ -3,32 +3,103 @@
 #include <string.h>
 #include "scan.h"
 
-typedef struct mnemonic {
-    char key;
-    char text[63];
-}Mnemonic;
+static char alt_count = 0;
+static char alt_val = 0;
 
+static char mn_arr[128][64];
+//Scan codes array, used to access character for equivalent scancode
+//[0][scancode] contains lowercase - no shift values for scancode
+//[1][scancode] contains uppercase - shift values for scancode
+static char sc_arr[2][128];
 
-static Mnemonic mn_arr[16];
-static char sc_arr[2][47];
-
-char sh_flag = 0;
-char alt_flag = 0;
-char ctrl_flag = 0;
+// Shift flag - used to access sc_arr[sh_flag][scancode]
+static char sh_flag = 0;
+static char alt_flag = 0;
+static char ctrl_flag = 0;
 
 
 void load_config(const char *scancodes_filename, const char *mnemonic_filename) {
-    if(load_scancodes(scancodes_filename))
+    if(!load_scancodes(scancodes_filename))
         _exit(0);
-    if(load_mnemonics(mnemonic_filename))
+    if(!load_mnemonics(mnemonic_filename))
         _exit(0);
+    
+    return;
 }
 
 
 
-int process_scancode(int scancode, char *buffer) {
-    int result;
 
+int process_scancode(int scancode, char *buffer) {
+    //Result will contain the current buffer length used for writing the buffer
+    //For now it contains 999 as i use the value for debugging purposes.
+    int result = 999;
+    
+    __asm__ __volatile__("cmpl $400, %2\n\t"
+                         "je EOF\n\t"
+                         "cmpl $301, %2\n\t"
+                         "je ALT_D\n\t"
+                         "cmpl $300, %2\n\t"
+                         "je SHIFT_D\n\t"
+                         "cmpl $201, %2\n\t"
+                         "je ALT_UP\n\t"
+                         "cmpl $200, %2\n\t"
+                         "jg NOT_CONTROL\n\t"
+                         "je SHIFT_UP\n\t"
+                         "NOT_CONTROL:\n\t"
+                         "cmpb $1, (alt_flag)\n\t"
+                         "je ALT\n\t"
+                         "xorl %%ebx, %%ebx\n\t"
+                         "xorl %%edx, %%edx\n\t"
+                         "movb (sh_flag), %%dl\n\t"
+                         "shlb $7, %%dl\n\t"
+                         "addl %2, %%edx\n\t"
+                         "movb sc_arr(,%%edx,1), %%bl\n\t"
+                         "movb %%bl, (%0)\n\t"
+                         "jmp END\n\t"
+                         "ALT:\n\t"
+                         "xorl %%ecx, %%ecx\n\t"
+                         "movw %2, %%cx\n\t"
+                         "xorl %%eax, %%eax\n\t"
+                         "cmpb $4, (alt_count)\n\t"
+                         "je END\n\t"
+                         "incb (alt_count)\n\t"
+                         "movb $10, %%al\n\t"
+                         "mulb (alt_val)\n\t"
+                         "jo ALT_OF\n\t"
+                         "addb %%al, %%cl\n\t"
+                         "movb %%cl, (alt_val)\n\t"
+                         "jmp END\n\t"
+                         "SHIFT_UP:\n\t"
+                         "movb $1,(sh_flag)\n\t"
+                         "jmp END\n\t"
+                         "ALT_UP:\n\t"
+                         "movb $1, (alt_flag)\n\t"
+                         "jmp END\n\t"
+                         "SHIFT_D:\n\t"
+                         "movb $0,(sh_flag)\n\t"
+                         "jmp END\n\t"
+                         "ALT_D:\n\t"
+                         "xorl %%edx, %%edx\n\t"
+                         "movb $0, (alt_count)\n\t"
+                         "movb $0, (alt_flag)\n\t"
+                         "movb (alt_val), %%dl\n\t"
+                         "movb $0, (alt_val)\n\t"
+                         "movb %%dl, (%0)\n\t"
+                         "jmp END\n\t"
+                         "ALT_OF:\n\t"
+                         //Overflow on ascii value will set 7 as it does not 
+                         //actually trigger the bell character in the terminal
+                         //It will be refined later with an error message. 
+                         "movb $7, (alt_val)\n\t" 
+                         "jmp END\n\t"
+                         "EOF:\n\t"
+                         "movb $0, (%0)\n\t"
+                         "END:\n\t"
+                         : "=r" (buffer), "=m" (result)
+                         : "g" (scancode) 
+                         :"memory", "%edx", "%ebx", "%ecx");
+    
     return result;
 }
 
@@ -44,13 +115,15 @@ int load_scancodes(const char *scancodes_filename) {
 
     for(i = 0; fgets(buf,fd) != 0; i++)
         strcpy(sc_arr[i], buf);
+
     
+    write(1,"Succesfuly read scancodes.\n",28);
     return 1;
 }
 
 int load_mnemonics(const char *mnemonic_filename) {
     int fd, i;
-    char buf[64], *tok, sep[2] = " ";
+    char buf[64], *tok, sep[2] = " ", val;
     
     if((fd = open(mnemonic_filename, O_RDONLY)) < 0) {
         write(1, "Mnemonic file can't be read, try with another file\n",52);
@@ -60,15 +133,15 @@ int load_mnemonics(const char *mnemonic_filename) {
 
     for(i = 0; fgets(buf,fd) != 0; i++) {
         tok = strtok(buf, sep);
-        mn_arr[i].key = *tok;
+        val = *tok;
         tok = strtok(NULL, "\n");
-        strcpy(mn_arr[i].text, tok);
+        strcpy(mn_arr[val], tok);
     }
-
+    write(1,"Succesfuly read mnemonics.\n",28);
     return 1;
 }
 
-//Implemented fgets here 
+//Implemented fgets here so we can skip including utils.h  
 int fgets(char *buff, int fd){
     int i = 0;
     char c;
