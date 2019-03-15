@@ -14,7 +14,7 @@
 
 # Linker output
 *.ilk
-*.map
+System.map
 *.exp
 
 # Precompiled Headers
