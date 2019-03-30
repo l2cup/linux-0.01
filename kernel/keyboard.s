@@ -352,6 +352,12 @@ bs_handle:
 	call backspace
 	ret
 
+space_handle:
+	cmpb $1, f1f
+	jne do_self
+	call space_pressed
+	ret
+
 /*
  * minus has a routine of it's own, as a 'E0h' before
  * the scan code for minus means that the numeric keypad
@@ -383,7 +389,7 @@ key_table:
 	.long do_self,do_self,do_self,do_self	/* 2C-2F z x c v */
 	.long do_self,do_self,do_self,do_self	/* 30-33 b n m , */
 	.long do_self,minus,rshift,do_self	/* 34-37 . - rshift * */
-	.long alt,do_self,caps,func		/* 38-3B alt sp caps f1 */
+	.long alt,space_handle,caps,func		/* 38-3B alt sp caps f1 */
 	.long func,func,func,func		/* 3C-3F f2 f3 f4 f5 */
 	.long func,func,func,func		/* 40-43 f6 f7 f8 f9 */
 	.long func,num,scroll,cursor		/* 44-47 f10 num scr home */

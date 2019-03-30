@@ -91,6 +91,7 @@ struct tty_queue * table_list[]={
 	&tty_table[2].read_q, &tty_table[2].write_q
 	};
 
+
 void tty_init(void)
 {
 	rs_init();

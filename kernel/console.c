@@ -665,6 +665,8 @@ void toggle_ef(void) {
 static unsigned long x_con, y_con;
 
 void efu(void) {
+	if(fm_flag != 2)
+		return;
 	x_con = x;
 	y_con = y;
 	cl_edit_flag = 1;
@@ -673,23 +675,24 @@ void efu(void) {
 }
 
 void efd(void) {
+	if(fm_flag != 2)
+		return;
 	draw_line(clipboard[clip_counter],clip_counter + 1, 0x87);
 	cl_edit_flag = 0;
-	clear_buffer();
-	gotoxy(x_con,y_con);
+	gotoxy(x_con + char_counter,y_con);
 	set_cursor();
+	clear_buffer();
 }
 
 void clear_buffer(void) {
+
 
 	for(char_counter; char_counter > 0 ;char_counter --) 
 		PUTCH(127, tty_table[0].read_q);
 		
 	copy_to_cooked(&tty_table[0]);
+
 }
-
-
-
 
 void draw_clipboard(void) {
 	char color = 0x87;
@@ -744,23 +747,52 @@ void draw_line(char * buf, unsigned long y, unsigned char text_color) {
 }
 
 void arr_up(void) {
-	draw_line(clipboard[clip_counter],clip_counter + 1, 0x87);
-	clip_counter--;
-	if(clip_counter < 0)
-		clip_counter = 9;
-	
-	cl_edit_flag = 1;
-	draw_line(clipboard[clip_counter],clip_counter + 1, 0x87);
-	cl_edit_flag = 0;
+	if(fm_flag == 0)
+		return;
+	else if(fm_flag == 1) {
+		return;
+	}
+	else {
+		draw_line(clipboard[clip_counter],clip_counter + 1, 0x87);
+		clip_counter--;
+		if(clip_counter < 0)
+			clip_counter = 9;
+		
+		cl_edit_flag = 1;
+		draw_line(clipboard[clip_counter],clip_counter + 1, 0x87);
+		cl_edit_flag = 0;
+	}
+}
+
+void space_pressed() {
+	int i;
+	if(fm_flag == 0)
+		return;
+	else if(fm_flag == 1){
+		return;
+	}
+	else {
+		for(i = 0; i < strlen(clipboard[clip_counter]); i++) {
+			PUTCH(clipboard[clip_counter][i],tty_table[0].read_q);
+		}
+		copy_to_cooked(&tty_table[0]);
+	}
 }
 
 
 void arr_down(void) {
-	draw_line(clipboard[clip_counter],clip_counter + 1, 0x87);
-	clip_counter = (clip_counter + 1) % 10;
-	cl_edit_flag = 1;
-	draw_line(clipboard[clip_counter],clip_counter + 1,0x87);
-	cl_edit_flag = 0;
+	if(fm_flag == 0)
+		return;
+	else if(fm_flag == 1) {
+		return;
+	}
+	else {
+		draw_line(clipboard[clip_counter],clip_counter + 1, 0x87);
+		clip_counter = (clip_counter + 1) % 10;
+		cl_edit_flag = 1;
+		draw_line(clipboard[clip_counter],clip_counter + 1,0x87);
+		cl_edit_flag = 0;
+	}
 }
 
 
