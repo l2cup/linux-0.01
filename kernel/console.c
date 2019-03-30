@@ -19,12 +19,22 @@
 #include <linux/tty.h>
 #include <asm/io.h>
 #include <asm/system.h>
+#include <string.h>
+#include <termios.h>
 
 #define SCREEN_START 0xb8000
 #define SCREEN_END   0xc0000
 #define LINES 25
 #define COLUMNS 80
 #define NPAR 16
+
+#define FM_START 57
+#define FM_WIDTH 22
+
+#define wchar(x,atb)__asm__("movb " #atb ",%%ah\n\t" \
+		"movw %%ax,%1\n\t" \
+		::"a" (x),"m" (*(short *)pos) \
+		/*:"ax"*/);\
 
 extern void keyboard_interrupt(void);
 
@@ -38,6 +48,16 @@ static unsigned long state=0;
 static unsigned long npar,par[NPAR];
 static unsigned long ques=0;
 static unsigned char attr=0x07;
+static volatile unsigned char attr_dl = 0x02;
+static volatile unsigned char sh_pound=0x02;
+static char fm_flag = 0;
+
+//Clib
+static char clip_counter = 0;
+static char clipboard[10][20];
+static char cl_edit_flag = 0;
+
+static char char_counter = 0;
 
 /*
  * this is what the terminal answers to a ESC-Z or csi0c
@@ -117,6 +137,12 @@ static void scrup(void)
 			"3" (origin+(columns<<1)*(top+1)),
 			[columns] "r" (columns)
 			:"memory");
+	}
+	if(fm_flag > 0) {
+		clean_frame();
+		draw_frame();
+		if(fm_flag == 2)
+			draw_clipboard();
 	}
 }
 
@@ -383,7 +409,6 @@ static void restore_cur(void)
 	y=saved_y;
 	pos=origin+((y*columns+x)<<1);
 }
-
 void con_write(struct tty_struct * tty)
 {
 	int nr;
@@ -400,12 +425,32 @@ void con_write(struct tty_struct * tty)
 						pos -= columns<<1;
 						lf();
 					}
-					__asm__("movb attr,%%ah\n\t"
-						"movw %%ax,%1\n\t"
-						::"a" (c),"m" (*(short *)pos)
-						/*:"ax"*/);
-					pos += 2;
-					x++;
+					if(fm_flag == 2 && cl_edit_flag) {	
+						int len = strlen(clipboard[clip_counter]);
+						clipboard[clip_counter][len] = c;
+						clipboard[clip_counter][len+1] = '\0';
+						draw_line(clipboard[clip_counter],clip_counter+1, 0x87);
+						if(len % 2 == 0) {
+							pos+= 2;
+							x++;
+						}
+						char_counter++;
+					}
+					else {
+						if(c == '#') {
+							__asm__("movb sh_pound, %%ah\n\t"
+									"movw %%ax, %1\n\t"
+									::"a" (c),"m"(*(short *)pos));
+						}
+						else {
+						__asm__("movb attr,%%ah\n\t"
+							"movw %%ax,%1\n\t"
+							::"a" (c),"m" (*(short *)pos)
+							/*:"ax"*/);
+						}
+						pos += 2;
+						x++;
+					}
 				} else if (c==27)
 					state=1;
 				else if (c==10 || c==11 || c==12)
@@ -413,12 +458,13 @@ void con_write(struct tty_struct * tty)
 				else if (c==13)
 					cr();
 				else if (c==ERASE_CHAR(tty))
-					del();
+					 del();
 				else if (c==8) {
-					if (x) {
-						x--;
-						pos -= 2;
-					}
+					 if (x) {
+					 	x--;
+					 	pos -= 2;
+					 }
+						
 				} else if (c==9) {
 					c=8-(x&7);
 					x += c;
@@ -562,4 +608,203 @@ void con_init(void)
 	a=inb_p(0x61);
 	outb_p(a|0x80,0x61);
 	outb(a,0x61);
+}
+
+/*
+ * This part contains code for the file manager.
+ * Someday i may put it in a seperate file for now it will stay here
+ * 
+ */
+
+//This draws the frame for the file manager
+void clean_frame() {
+	int i, j;
+	save_cur();
+
+	for(i = 0; i < 12; i ++) { 
+		for (j = FM_START; j < COLUMNS; j ++) {	
+				gotoxy(j,i);
+				wchar(' ',attr);
+		}
+	}
+	restore_cur();	
+}
+
+void gotoclixy() {
+	int border;
+	border = ((FM_WIDTH - strlen(clipboard[clip_counter]) + 1) / 2);
+	gotoxy(FM_START + border + strlen(clipboard[clip_counter]), //x
+										 clip_counter + 1); //y
+	set_cursor();
+}
+
+void backspace(void) {
+
+		int len = strlen(clipboard[clip_counter]);
+
+		if(len != 0) {
+			clipboard[clip_counter][len - 1] = '\0';
+			if(len % 2 == 1){
+				x--;
+				pos-=2;
+			}
+			set_cursor();
+			draw_line(clipboard[clip_counter],clip_counter + 1,0x87);
+		}
+	
+}
+
+void toggle_ef(void) {
+	if(cl_edit_flag == 0)
+		efu();
+	else
+		efd();	
+}
+
+
+static unsigned long x_con, y_con;
+
+void efu(void) {
+	x_con = x;
+	y_con = y;
+	cl_edit_flag = 1;
+	draw_line(clipboard[clip_counter],clip_counter + 1, 0x87);
+	gotoclixy();
+}
+
+void efd(void) {
+	draw_line(clipboard[clip_counter],clip_counter + 1, 0x87);
+	cl_edit_flag = 0;
+	clear_buffer();
+	gotoxy(x_con,y_con);
+	set_cursor();
+}
+
+void clear_buffer(void) {
+
+	for(char_counter; char_counter > 0 ;char_counter --) 
+		PUTCH(127, tty_table[0].read_q);
+		
+	copy_to_cooked(&tty_table[0]);
+}
+
+
+
+
+void draw_clipboard(void) {
+	char color = 0x87;
+	int i;
+	draw_header("[ Clipboard ]");
+	for(i = 0; i < 10; i ++) {
+		if(i == clip_counter){
+			cl_edit_flag = 1;
+			draw_line(clipboard[clip_counter],clip_counter + 1, color);
+			cl_edit_flag = 0;
+		}
+		else {
+			draw_line(clipboard[i],i + 1,color);
+		}
+		
+	}
+		
+}
+
+
+
+void draw_line(char * buf, unsigned long y, unsigned char text_color) {
+	attr_dl = text_color;
+	if(y <= 0 || y > 10)
+		return;
+	save_cur();
+	int i, j, border, saved_x, saved_y;
+	border = ((FM_WIDTH - strlen(buf) + 1) / 2) + 1;
+	saved_x = x;
+	saved_y = y;
+	for(i = FM_START + 1, j = 0;i < COLUMNS - 1; i++) {
+		if(i - FM_START + 1 == border + j) {
+			gotoxy(i, y);
+			if(fm_flag == 1 || cl_edit_flag == 1) {
+				wchar(buf[j],attr_dl);
+			}
+			else {
+				wchar(buf[j],attr);
+			}
+			j++;
+		}
+		else if(fm_flag == 2 && cl_edit_flag == 1){
+			gotoxy(i, y);
+			wchar(' ',attr_dl);
+		}
+		else {
+			gotoxy(i, y);
+			wchar(' ', attr);
+		}
+	}
+	restore_cur();
+}
+
+void arr_up(void) {
+	draw_line(clipboard[clip_counter],clip_counter + 1, 0x87);
+	clip_counter--;
+	if(clip_counter < 0)
+		clip_counter = 9;
+	
+	cl_edit_flag = 1;
+	draw_line(clipboard[clip_counter],clip_counter + 1, 0x87);
+	cl_edit_flag = 0;
+}
+
+
+void arr_down(void) {
+	draw_line(clipboard[clip_counter],clip_counter + 1, 0x87);
+	clip_counter = (clip_counter + 1) % 10;
+	cl_edit_flag = 1;
+	draw_line(clipboard[clip_counter],clip_counter + 1,0x87);
+	cl_edit_flag = 0;
+}
+
+
+
+void draw_header(char * buf){
+	int i, j, border;
+	border = (FM_WIDTH - strlen(buf) + 1) / 2;
+	save_cur();
+	for(i = FM_START, j = 0; j < strlen(buf); i++) {
+		if(i - FM_START == border + j) {
+			gotoxy(i, 0);
+			wchar(buf[j],attr);
+			j++;
+		}
+	}
+	restore_cur();	
+}
+
+
+void draw_frame(void) {	
+	int i, j;
+	save_cur();
+	for(i = 0; i < 12; i ++) { 
+		for (j = FM_START; j < COLUMNS; j ++) {
+			if(i == 0 || i == 11) {
+				gotoxy(j,i);
+				wchar('#',attr);
+			}
+			else{
+				if(j == FM_START || j == COLUMNS - 1) {
+					gotoxy(j,i);
+					wchar('#',attr);
+				}
+			}
+		}
+	}
+	restore_cur();
+}
+
+void fm_toggle(void) {
+	fm_flag = (fm_flag + 1) % 3;
+	clean_frame();
+	if(fm_flag != 0)
+		draw_frame();
+	if(fm_flag == 2)
+		draw_clipboard();
 }

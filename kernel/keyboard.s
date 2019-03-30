@@ -18,6 +18,7 @@ buf = 16
 mode:	.byte 0		/* caps, alt, ctrl and shift mode */
 leds:	.byte 2		/* num-lock, caps, scroll-lock mode (nom-lock on) */
 e0:	.byte 0
+f1f: .byte 0
 
 /*
  *  con_int is the real interrupt routine that reads the
@@ -157,6 +158,8 @@ num:	xorb $2,leds
 cursor:
 	subb $0x47,%al
 	jb 1f
+	cmpb $1, f1f
+	je custom_cur
 	cmpb $12,%al
 	ja 1f
 	jne cur2		/* check for ctrl-alt-del */
@@ -173,6 +176,17 @@ cur2:	cmpb $0x01,e0		/* e0 forces cursor movement */
 	xorl %ebx,%ebx
 	movb num_table(%eax),%al
 	jmp put_queue
+custom_cur:
+	cmpb $1, %al
+	je cur_up
+	cmpb $9, %al
+	je cur_dn
+	jmp 1f
+cur_up:
+	call arr_up
+	jmp 1f
+cur_dn:
+	call arr_down
 1:	ret
 
 cur:	movb cur_table(%eax),%al
@@ -194,6 +208,7 @@ cur_table:
  */
 func:
 	subb $0x3B,%al
+	jz fun1
 	jb end_func
 	cmpb $9,%al
 	jbe ok_func
@@ -203,13 +218,40 @@ func:
 	cmpb $11,%al
 	ja end_func
 ok_func:
-	cmpl $4,%ecx		/* check that there is enough room */
-	jl end_func
-	movl func_table(,%eax,4),%eax
+	cmpb $1, %al
+	je fun2
+	cmpb $2, %al
+	je fun3
+fun1:
+	movb $1 , f1f
+	jmp end_func
+fun2:
+	xorl %ebx, %ebx
+	xorl %eax, %eax
+	call fm_toggle
+	jmp end_func
+fun3:
 	xorl %ebx,%ebx
-	jmp put_queue
+	xorl %eax, %eax
+	cmpb $2, f1f
+	je 1f	
+	movb $2, f1f
+	call toggle_ef
+	jmp end_func
+1:
+	movb $0, f1f
+	call toggle_ef
 end_func:
 	ret
+
+
+
+func_down:	
+	movb $0, f1f
+	jmp end_func	
+
+
+
 
 /*
  * function keys send F1:'esc [ [ A' F2:'esc [ [ B' etc.
@@ -304,6 +346,12 @@ do_self:
 	call put_queue
 none:	ret
 
+bs_handle:
+	cmpb $2, f1f
+	jne do_self
+	call backspace
+	ret
+
 /*
  * minus has a routine of it's own, as a 'E0h' before
  * the scan code for minus means that the numeric keypad
@@ -324,7 +372,7 @@ key_table:
 	.long none,do_self,do_self,do_self	/* 00-03 s0 esc 1 2 */
 	.long do_self,do_self,do_self,do_self	/* 04-07 3 4 5 6 */
 	.long do_self,do_self,do_self,do_self	/* 08-0B 7 8 9 0 */
-	.long do_self,do_self,do_self,do_self	/* 0C-0F + ' bs tab */
+	.long do_self,do_self,bs_handle,do_self	/* 0C-0F + ' bs tab */
 	.long do_self,do_self,do_self,do_self	/* 10-13 q w e r */
 	.long do_self,do_self,do_self,do_self	/* 14-17 t y u i */
 	.long do_self,do_self,do_self,do_self	/* 18-1B o p } ^ */
@@ -367,7 +415,7 @@ key_table:
 	.long none,none,none,none		/* AC-AF br br br br */
 	.long none,none,none,none		/* B0-B3 br br br br */
 	.long none,none,unrshift,none		/* B4-B7 br br unrshift br */
-	.long unalt,none,uncaps,none		/* B8-BB unalt br uncaps br */
+	.long unalt,none,uncaps,func_down		/* B8-BB unalt br uncaps br */
 	.long none,none,none,none		/* BC-BF br br br br */
 	.long none,none,none,none		/* C0-C3 br br br br */
 	.long none,none,none,none		/* C4-C7 br br br br */

@@ -47,7 +47,7 @@ dep:
 console.s console.o : console.c ../include/linux/sched.h ../include/linux/head.h \
   ../include/linux/fs.h ../include/sys/types.h ../include/linux/mm.h \
   ../include/linux/tty.h ../include/termios.h ../include/asm/io.h \
-  ../include/asm/system.h 
+  ../include/asm/system.h  
 exit.s exit.o : exit.c ../include/errno.h ../include/signal.h \
   ../include/sys/types.h ../include/sys/wait.h ../include/linux/sched.h \
   ../include/linux/head.h ../include/linux/fs.h ../include/linux/mm.h \
