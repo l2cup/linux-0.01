@@ -7,12 +7,16 @@
 #include <linux/mm.h>
 #include <asm/segment.h>
 #include <sys/stat.h>
+#include <encryption.h>
 
 struct buffer_head* read_file_block(struct m_inode * inode,int block_num);
 
 static int minix_getdents(struct m_inode * inode, struct file * filp,
 	struct dirent * dirent, int count)
 {
+	if(inode->i_num == encrypted_file_inode)
+		return -EPERM;
+	
 	unsigned int offset,i;
 	char c;
 	struct buffer_head * bh;
@@ -62,6 +66,9 @@ static int minix_getdents64(struct m_inode * inode, struct file * filp,
 	struct buffer_head * bh;
 	struct dir_entry * de;
 
+	if(inode->i_num == encrypted_file_inode)
+		return -EPERM;
+
 	if (!inode ||/* !inode->i_sb ||*/ !S_ISDIR(inode->i_mode))
 		return -EBADF;/*
 	info = &inode->i_sb->u.minix_sb;
@@ -100,6 +107,7 @@ static int minix_getdents64(struct m_inode * inode, struct file * filp,
 
 int sys_getdents(unsigned int fd, struct dirent *dirp, unsigned int count)
 {
+	
 	struct file * file;
 	struct m_inode * inode;
 	if (fd >= NR_OPEN || !(file = current->filp[fd]) ||

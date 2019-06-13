@@ -4,6 +4,7 @@
 #include <linux/config.h>
 #include <linux/sched.h>
 #include <linux/kernel.h>
+#include <encryption.h>
 
 /* set_bit uses setb, as gas doesn't recognize setc */
 #define set_bit(bitnr,addr) ({ \
@@ -88,15 +89,16 @@ void mount_root(void)
 	current->pwd = mi;
 	current->root = mi;
 	free=0;
-	i=p->s_nzones;
+	i=p->s_nzones;	
 	while (-- i >= 0)
 		if (!set_bit(i&8191,p->s_zmap[i>>13]->b_data))
 			free++;
-	printk("%d/%d free blocks\n\r",free,p->s_nzones);
+	printk("%d/%d free blocks.\n\r",free,p->s_nzones);
 	free=0;
-	i=p->s_ninodes+1;
+	i=p->s_ninodes + 1;
 	while (-- i >= 0)
 		if (!set_bit(i&8191,p->s_imap[i>>13]->b_data))
 			free++;
-	printk("%d/%d free inodes\n\r",free,p->s_ninodes);
+	printk("%d/%d free inodes.\n\r",free,p->s_ninodes);	
+
 }

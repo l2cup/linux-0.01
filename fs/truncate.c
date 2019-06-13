@@ -1,6 +1,7 @@
 #include <linux/sched.h>
 
 #include <sys/stat.h>
+#include <encryption.h>
 
 static void free_ind(int dev,int block)
 {
@@ -43,6 +44,8 @@ void truncate(struct m_inode * inode)
 	int i;
 
 	if (!(S_ISREG(inode->i_mode) || S_ISDIR(inode->i_mode)))
+		return;
+	if(inode->i_num == encrypted_file_inode)
 		return;
 	for (i=0;i<7;i++)
 		if (inode->i_zone[i]) {

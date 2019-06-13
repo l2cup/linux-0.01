@@ -12,7 +12,7 @@ LD	=ld -m  elf_i386
 LDFLAGS	=-g #-s -x
 CC	=gcc
 CFLAGS	=-Wall -O -fstrength-reduce -fomit-frame-pointer -m32 \
-	-finline-functions -fno-stack-protector -nostdinc -fno-builtin -g -I../include
+	-finline-functions -fno-stack-protector -nostdinc -fno-builtin -g -I../include -I../apps/utils
 CPP	=gcc -E -nostdinc -I../include
 
 .c.s:
@@ -27,7 +27,7 @@ CPP	=gcc -E -nostdinc -I../include
 OBJS  = sched.o system_call.o traps.o asm.o fork.o \
 	panic.o printk.o vsprintf.o tty_io.o console.o \
 	keyboard.o rs_io.o hd.o sys.o exit.o serial.o \
-	mktime.o
+	mktime.o encryption.o
 
 kernel.o: $(OBJS)
 	$(LD) -r -o kernel.o $(OBJS)
@@ -47,7 +47,7 @@ dep:
 console.s console.o : console.c ../include/linux/sched.h ../include/linux/head.h \
   ../include/linux/fs.h ../include/sys/types.h ../include/linux/mm.h \
   ../include/linux/tty.h ../include/termios.h ../include/asm/io.h \
-  ../include/asm/system.h  
+  ../include/asm/system.h ../include/linux/fs.h ../include/sys/stat.h
 exit.s exit.o : exit.c ../include/errno.h ../include/signal.h \
   ../include/sys/types.h ../include/sys/wait.h ../include/linux/sched.h \
   ../include/linux/head.h ../include/linux/fs.h ../include/linux/mm.h \
@@ -88,3 +88,4 @@ tty_io.s tty_io.o : tty_io.c ../include/ctype.h ../include/errno.h \
   ../include/linux/tty.h ../include/termios.h ../include/asm/segment.h \
   ../include/asm/system.h 
 vsprintf.s vsprintf.o : vsprintf.c ../include/stdarg.h ../include/string.h 
+encryption.s encryption.o : encryption.c ../include/encryption.h

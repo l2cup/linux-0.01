@@ -17,7 +17,7 @@ If you want you can use [dietlibc](https://www.fefe.de/dietlibc/) which is a min
 There is a utility library named [utils.h](apps/utils/utils.h) which will be worked on to contain needed utilities for this project, if there becomes a need for more libraries, they will be added in the *libs* folder which currently doesn't exist, containing the *utils* folder in it.
 
 ## User space
-As the focus of the class for now is userspace, all of the working programs titles and it's descriptions will be listed here. I will be updating the list with more programs as we make them. 
+There are some userspace applications, but most of the focus was shifted on kernelspace. 
 
 ### Keyboard emulator
 
@@ -72,7 +72,63 @@ The mnemonic [file](apps/keyboard_emulator/ctrl.map) included, as well as the pr
 
 
 ## Kernel space
-For now no kernel code was written, but since this is only a beginning, in the future it may as well be. Neverentless of the class assignments that we are given, there is a slight annoyance in the keyboard mapping which is currently using a Finnish keyboard layout. As the mapping is table based it will probably be changed to US(International) in the near future.
+In the kernel we have implemented two POC-s. One of them is a file manager / clipboard. It lists all the files in the directory coloring them, and using arrows you can navigate through it. The second one is a encryption tool. It uses matrix transposition algorithm, which is easily breakable, but as a POC it does it's purpose.
+
+### File Manager
+
+#### Getting started
+To toggle between file manager mode, clipboard mode and off you press F2.
+To move between files hold F1 and use the arrow keys.
+Pressing F1 and Space in both modes will copy the current selection to the console. If a file is selected it will copy it's absoulute path to the console.
+In Clipboard mode pressing F3 will toggle writing mode between the clipboard and the console.
+All writings in clipboard mode are saved while using the system, closing the tool will not delete saved notes, but will reset the file manager to current root directory.
+
+#### Implementation
+
+Implementation is done firstly in [**keyboard.s**](kernel/keyboard.s), where scancodes are rerouted to my own functions in [**console.c**](kernel/console.c). I didn't make a new file because it's closely tied to the console, and i will no longer be doing anything on this OS.
+
+All the logic is written in [**console.c**](kernel/console.c), drawing, saving notes, listing directories etc..
+Besides that, in console.c are two system calls which i wrote to turn echo on and off, as i couldn't make this work when i did the file manager, it uses a rather weird workaround.
+
+
+### Encryption
+
+Here i implemented a full on file/folder encryption. It uses a rather simple algorithm to encrypt stuff, because it's a POC and it was implemented to learn more about the file system.
+
+#### Getting started
+encr decr keyclear keyset key  keygen
+There are 6 tools that use my own implemented system calls to encrypt stuff. Most logic is in the kernel space, tools are just used for argument passing.
+
+##### Keyset Tool
+Keyset tool is used to set the key for encryption. It uses the sys_keyset system call located in [**encryption.c**](kernel/encryption.c). In the same file the global key is saved.
+Keys can be global or local, the tool sets a global key which expires in 120 seconds, a local key will expire in 45 seconds and can be set using other tools, setting the global flag to 0.
+Maximum key length can be 512 bytes. This applies to both global and local keys. Local keys have advantage over the global key. That means if both local and global keys are set, first it will try to use the local key. Keys have their hash value saved in a file whenever something is encrypted.
+
+Call the tool and use it like sudo. It doesn't print the key on the screen when typed, that's what i use my echo on/off system calls for.
+
+##### Key Tool
+
+Key tool is used to print the current set key on the console. This was used for testing but now it's left there as a usable tool.
+
+##### Keygen Tool
+
+It uses the sys_keygen system call located in [**encryption.c**](kernel/encryption.c).
+Keygen uses levels to generate a key. There are 3 levels. Level 1 generates a random key of length 4, level 2 of length 8 and level 3 of length 16.
+`keygen 'level'` Just replace level with a number.
+
+##### Encr Tool
+
+This tool will encrypt a directory/file with a set key. After encrypting files it will save all the encrypted files and its key hash values. To save all the encrypted files to a already prepared physical file which cannot be accesed in the system use `sync`.
+
+This uses a transposition matrix alghoritm on every block of 1024 bytes.
+
+Encrypting folders will encrypt all the file names, as well as the files themselves. It will not re-encrypt already encrypted files, which means if you try to decrypt a folder with one key, and some files are encrypted with another key it will skip those files as the hash values do not match.
+
+##### Decr Tool
+
+Tool used for decrypting files/directories. Checks for matching hash values, uses local key first, then global. If there isn't a key set it will throw an error as well as if the file isn't encrypted. Also uses tranposition matrix algorithm to decrypt every 1024 bytes.
+If a file is decrypted and the appropriate key is set, using `cat` or `echo` will work normally as the file isn't encrypted. This is done by changing the [**file_dev.c**](fs/file_dev.c) file and appropriate methods in it. Every tool that uses those **file_read** and **file_write** to handle files will work if the key is good.
+
 
 ## Resources
 This is a list of useful resources if you want to get this kernel up and running and get a better understanding of it:  

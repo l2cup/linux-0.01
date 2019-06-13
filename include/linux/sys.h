@@ -75,7 +75,18 @@ extern int sys_lstat64();
 extern int sys_fstat64();
 extern int sys_getdents64();
 extern int sys_fcntl64();
+extern int sys_clear();
+extern int sys_echo_off();
+extern int sys_echo_on();
+extern int sys_init_encryption();
+extern int sys_key();
+extern int sys_keyset();
+extern int sys_encr();
+extern int sys_decr();
+extern int sys_keyclear();
+extern int sys_keygen();
 extern int sys_null();	/* not implemented sys_call */
+
 
 fn_ptr sys_call_table[] = { sys_setup, sys_exit, sys_fork, sys_read,
 sys_write, sys_open, sys_close, sys_waitpid, sys_creat, sys_link,
@@ -88,13 +99,13 @@ sys_rmdir, sys_dup, sys_pipe, sys_times, sys_prof, sys_brk, sys_setgid,
 sys_getgid, sys_signal, sys_geteuid, sys_getegid, sys_acct, sys_phys,
 sys_lock, sys_ioctl, sys_fcntl, sys_mpx, sys_setpgid, sys_ulimit,
 sys_oldolduname, sys_umask, sys_chroot, sys_ustat, sys_dup2, sys_getppid,
-sys_getpgrp,sys_setsid, sys_null /*67*/,sys_null,sys_null,
+sys_getpgrp,sys_setsid, sys_null /*67*/,sys_null,sys_init_encryption,
 
-/* 70 */sys_null,sys_null,sys_null,sys_null,sys_null,
+/* 70 */sys_keyset,sys_encr,sys_decr,sys_keyclear,sys_keygen,
+sys_key,sys_null,sys_null,sys_null,sys_null,
+/* 80 */sys_clear,sys_null,sys_null,sys_null,sys_null,
 sys_null,sys_null,sys_null,sys_null,sys_null,
-/* 80 */sys_null,sys_null,sys_null,sys_null,sys_null,
-sys_null,sys_null,sys_null,sys_null,sys_null,
-/* 90 */sys_null,sys_null,sys_null,sys_null,sys_null,
+/* 90 */sys_echo_off,sys_echo_on,sys_null,sys_null,sys_null,
 sys_null,sys_null,sys_null,sys_null,sys_null,
 /* 100 */sys_null,sys_null,sys_null,sys_null,sys_null,
 sys_null,sys_stat,sys_lstat,sys_fstat,sys_null,

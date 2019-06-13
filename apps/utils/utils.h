@@ -13,3 +13,5 @@
 void strrvs(unsigned char *str);
 int itoa(int num, unsigned char *str, int base);
 int atoi(const char *str);
+int get_argc(char * args);
+char *get_argv(char * args, int argnum);

@@ -181,12 +181,22 @@ custom_cur:
 	je cur_up
 	cmpb $9, %al
 	je cur_dn
+	cmpb $4, %al
+	je cur_left
+	cmpb $6, %al
+	je cur_right
 	jmp 1f
 cur_up:
 	call arr_up
 	jmp 1f
 cur_dn:
 	call arr_down
+	jmp 1f
+cur_left:
+	call arr_left
+	jmp 1f
+cur_right:
+	call arr_right
 1:	ret
 
 cur:	movb cur_table(%eax),%al

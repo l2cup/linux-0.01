@@ -125,6 +125,15 @@
 #define __NR_getppid	64
 #define __NR_getpgrp	65
 #define __NR_setsid		66
+#define __NR_init_encryption 69
+#define __NR_keyset		70
+#define __NR_encr		71
+#define __NR_decr		72
+#define __NR_keyclear	73
+#define __NR_keygen		74
+#define __NR_key		75
+#define __NR_echo_off	90
+#define __NR_echo_on	91
 #define __NR_stat		106
 #define __NR_lstat		107
 #define __NR_fstat		108
@@ -135,6 +144,9 @@
 #define __NR_fstat64	197
 #define __NR_getdents64	220
 #define __NR_fcntl64	221
+
+
+#define __NR_clear 80
 
 #define _syscall0(type,name) \
 type name(void) \
@@ -256,5 +268,15 @@ pid_t getpgrp(void);
 pid_t setsid(void);
 int getdents(unsigned int fd, struct dirent *dirp, unsigned int count);
 int getdents64(unsigned int fd, struct dirent64 *dirp, unsigned int count);
+int clear(void);
+int echo_on(void);
+int echo_off(void);
+int init_encryption(void);
+int key(void);
+int keyset(const char *key,int global);
+int encr(const char *filename);
+int decr(const char *filename);
+int keyclear(int global);
+int keygen(int level);
 
 #endif

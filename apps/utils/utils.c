@@ -34,11 +34,37 @@ int itoa(int num, unsigned char *str,int base) {
 
 //Converts a string to an int
 int atoi(const char *str) {
-    int r = 0, 
+    long r = 0, 
         i = 0;
     do {
         r = r * 10 + str[i++] - '0';
     } while(isdigit(str[i]));
 
     return r;
+}
+
+int get_argc(char *args)
+{
+	int r = 0, i = 0;
+	while(strncmp(args + i, "PATH=", 5))
+	{
+		while(args[i++]);
+		r++;
+	}
+	return r;
+}
+
+char *get_argv(char *args, int argnum)
+{
+	int i = 0, __tmp;
+	static int __offset[] = {5, 4, 6, 5, 2};
+	if(argnum >= 0) while(argnum--) while(args[i++]);
+	else
+	{
+		__tmp = argnum = -argnum - 1;
+		while(strncmp(args + i, "PATH=", 5)) while(args[i++]);
+		while(argnum--) while(args[i++]);
+		return args + i + __offset[__tmp];
+	}	
+	return args + i;
 }

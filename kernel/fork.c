@@ -10,6 +10,7 @@
 #include <linux/kernel.h>
 #include <asm/segment.h>
 #include <asm/system.h>
+#include <string.h>
 
 extern void write_verify(unsigned long address);
 
@@ -122,6 +123,8 @@ int copy_process(int nr,long ebp,long edi,long esi,long gs,long none,
 	set_tss_desc(gdt+(nr<<1)+FIRST_TSS_ENTRY,&(p->tss));
 	set_ldt_desc(gdt+(nr<<1)+FIRST_LDT_ENTRY,&(p->ldt));
 	task[nr] = p;	/* do this last, just in case */
+	memset(p->encryption_key,0,512);
+	p->keyset_time = 0;
 	return last_pid;
 }
 

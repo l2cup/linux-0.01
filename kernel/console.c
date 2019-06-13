@@ -21,6 +21,8 @@
 #include <asm/system.h>
 #include <string.h>
 #include <termios.h>
+#include <linux/fs.h>
+#include <sys/stat.h>
 
 #define SCREEN_START 0xb8000
 #define SCREEN_END   0xc0000
@@ -30,6 +32,7 @@
 
 #define FM_START 57
 #define FM_WIDTH 22
+#define CL_SELECTED_COLOR 0x87
 
 #define wchar(x,atb)__asm__("movb " #atb ",%%ah\n\t" \
 		"movw %%ax,%1\n\t" \
@@ -58,6 +61,19 @@ static char clipboard[10][20];
 static char cl_edit_flag = 0;
 
 static char char_counter = 0;
+
+//FM
+
+static char fm_header[20];
+//static char back_header[20];
+static short back = 1;
+static short inodes[10];
+static char fm_names[10][15];
+static unsigned char fm_colors[10];
+static short root = 1;
+static char fm_maximum;
+static char fm_counter = 0;
+
 
 /*
  * this is what the terminal answers to a ESC-Z or csi0c
@@ -143,6 +159,8 @@ static void scrup(void)
 		draw_frame();
 		if(fm_flag == 2)
 			draw_clipboard();
+		else if(fm_flag == 1)
+			draw_fm(root);
 	}
 }
 
@@ -429,7 +447,7 @@ void con_write(struct tty_struct * tty)
 						int len = strlen(clipboard[clip_counter]);
 						clipboard[clip_counter][len] = c;
 						clipboard[clip_counter][len+1] = '\0';
-						draw_line(clipboard[clip_counter],clip_counter+1, 0x87);
+						draw_line(clipboard[clip_counter],clip_counter+1, CL_SELECTED_COLOR);
 						if(len % 2 == 0) {
 							pos+= 2;
 							x++;
@@ -631,8 +649,7 @@ void clean_frame() {
 }
 
 void gotoclixy() {
-	int border;
-	border = ((FM_WIDTH - strlen(clipboard[clip_counter]) + 1) / 2);
+	int border = ((FM_WIDTH - strlen(clipboard[clip_counter]) + 1) / 2);
 	gotoxy(FM_START + border + strlen(clipboard[clip_counter]), //x
 										 clip_counter + 1); //y
 	set_cursor();
@@ -649,7 +666,7 @@ void backspace(void) {
 				pos-=2;
 			}
 			set_cursor();
-			draw_line(clipboard[clip_counter],clip_counter + 1,0x87);
+			draw_line(clipboard[clip_counter],clip_counter + 1,CL_SELECTED_COLOR);
 		}
 	
 }
@@ -670,14 +687,14 @@ void efu(void) {
 	x_con = x;
 	y_con = y;
 	cl_edit_flag = 1;
-	draw_line(clipboard[clip_counter],clip_counter + 1, 0x87);
+	draw_line(clipboard[clip_counter],clip_counter + 1, CL_SELECTED_COLOR);
 	gotoclixy();
 }
 
 void efd(void) {
 	if(fm_flag != 2)
 		return;
-	draw_line(clipboard[clip_counter],clip_counter + 1, 0x87);
+	draw_line(clipboard[clip_counter],clip_counter + 1, CL_SELECTED_COLOR);
 	cl_edit_flag = 0;
 	gotoxy(x_con + char_counter,y_con);
 	set_cursor();
@@ -686,26 +703,23 @@ void efd(void) {
 
 void clear_buffer(void) {
 
-
 	for(char_counter; char_counter > 0 ;char_counter --) 
 		PUTCH(127, tty_table[0].read_q);
 		
 	copy_to_cooked(&tty_table[0]);
-
 }
 
 void draw_clipboard(void) {
-	char color = 0x87;
 	int i;
 	draw_header("[ Clipboard ]");
 	for(i = 0; i < 10; i ++) {
 		if(i == clip_counter){
 			cl_edit_flag = 1;
-			draw_line(clipboard[clip_counter],clip_counter + 1, color);
+			draw_line(clipboard[clip_counter],clip_counter + 1,CL_SELECTED_COLOR);
 			cl_edit_flag = 0;
 		}
 		else {
-			draw_line(clipboard[i],i + 1,color);
+			draw_line(clipboard[i],i + 1,CL_SELECTED_COLOR);
 		}
 		
 	}
@@ -726,13 +740,14 @@ void draw_line(char * buf, unsigned long y, unsigned char text_color) {
 	for(i = FM_START + 1, j = 0;i < COLUMNS - 1; i++) {
 		if(i - FM_START + 1 == border + j) {
 			gotoxy(i, y);
-			if(fm_flag == 1 || cl_edit_flag == 1) {
+			if((fm_flag == 1 || cl_edit_flag == 1)) {
 				wchar(buf[j],attr_dl);
 			}
 			else {
 				wchar(buf[j],attr);
 			}
-			j++;
+			if(j < strlen(buf) - 1)
+				j++;
 		}
 		else if(fm_flag == 2 && cl_edit_flag == 1){
 			gotoxy(i, y);
@@ -750,16 +765,21 @@ void arr_up(void) {
 	if(fm_flag == 0)
 		return;
 	else if(fm_flag == 1) {
-		return;
+		draw_line(fm_names[fm_counter],fm_counter + 1,fm_colors[fm_counter]);
+		fm_counter--;
+		if(fm_counter < 0)
+			fm_counter = fm_maximum - 1;
+		
+		draw_line(fm_names[fm_counter],fm_counter + 1, fm_colors[fm_counter] +0x80);
 	}
 	else {
-		draw_line(clipboard[clip_counter],clip_counter + 1, 0x87);
+		draw_line(clipboard[clip_counter],clip_counter + 1, CL_SELECTED_COLOR);
 		clip_counter--;
 		if(clip_counter < 0)
 			clip_counter = 9;
 		
 		cl_edit_flag = 1;
-		draw_line(clipboard[clip_counter],clip_counter + 1, 0x87);
+		draw_line(clipboard[clip_counter],clip_counter + 1, CL_SELECTED_COLOR);
 		cl_edit_flag = 0;
 	}
 }
@@ -769,7 +789,14 @@ void space_pressed() {
 	if(fm_flag == 0)
 		return;
 	else if(fm_flag == 1){
-		return;
+		for(i = 0; i < strlen(fm_header); i ++ ) {
+			PUTCH(fm_header[i],tty_table[0].read_q);
+		}
+		//PUTCH('/',tty_table[0].read_q);
+		for(i = 0; i < strlen(fm_names[fm_counter]); i ++) {
+			PUTCH(fm_names[fm_counter][i],tty_table[0].read_q);
+		}
+		copy_to_cooked(&tty_table[0]);
 	}
 	else {
 		for(i = 0; i < strlen(clipboard[clip_counter]); i++) {
@@ -784,13 +811,18 @@ void arr_down(void) {
 	if(fm_flag == 0)
 		return;
 	else if(fm_flag == 1) {
-		return;
+		draw_line(fm_names[fm_counter],fm_counter + 1,fm_colors[fm_counter]);
+		fm_counter = (fm_counter + 1) % fm_maximum;
+		if(fm_counter < 0)
+			fm_counter = fm_maximum;
+		
+		draw_line(fm_names[fm_counter],fm_counter + 1, fm_colors[fm_counter] +0x80);
 	}
 	else {
-		draw_line(clipboard[clip_counter],clip_counter + 1, 0x87);
+		draw_line(clipboard[clip_counter],clip_counter + 1, CL_SELECTED_COLOR);
 		clip_counter = (clip_counter + 1) % 10;
 		cl_edit_flag = 1;
-		draw_line(clipboard[clip_counter],clip_counter + 1,0x87);
+		draw_line(clipboard[clip_counter],clip_counter + 1,CL_SELECTED_COLOR);
 		cl_edit_flag = 0;
 	}
 }
@@ -798,8 +830,8 @@ void arr_down(void) {
 
 
 void draw_header(char * buf){
-	int i, j, border;
-	border = (FM_WIDTH - strlen(buf) + 1) / 2;
+	int i, j, 
+		border = (FM_WIDTH - strlen(buf) + 1) / 2;
 	save_cur();
 	for(i = FM_START, j = 0; j < strlen(buf); i++) {
 		if(i - FM_START == border + j) {
@@ -832,11 +864,175 @@ void draw_frame(void) {
 	restore_cur();
 }
 
+
+void _go_right(short new_root) {
+	short temp = root;
+	root = new_root;
+	back = root;
+}
+
+void _go_left(void) {
+	short temp = back;
+	root = back;
+	struct m_inode *node = iget(0x301,root);
+	struct dir_entry * den;
+	struct buffer_head * buff_head = bread(0x301,node->i_zone[0]);
+	den = (struct dir_entry *) buff_head->b_data;
+	den++;
+	back = den->inode;
+	iput(node);
+}
+
+
+void arr_left(void) {
+	int i;
+	for(i = strlen(fm_header) - 1; i > 0; i--) {
+		if(fm_header[i] == '\\') {
+			fm_header[i] = '\0';
+			return;
+		}
+		fm_header[i] = '\0';
+	}
+	clean_frame();
+	draw_frame();
+	draw_header(fm_header);
+	draw_fm(back);
+}
+
+void arr_right(void) {
+	if(fm_colors[fm_counter] != 0x0B)
+		return;
+
+	//struct m_inode *next = iget(0x301,inodes[fm_counter]);
+	strcat(fm_header,fm_names[fm_counter]);
+	strcat(fm_header,"/");
+	clean_frame();
+	draw_frame();
+	draw_fm(inodes[fm_counter]);
+
+
+
+}
+
+void draw_fm(short _root) {
+
+	draw_header(fm_header);
+	struct m_inode * node = iget(0x301,_root);
+	int num, i, j;
+	struct dir_entry * den;
+	struct buffer_head *buff_head;
+
+	num = (node->i_size / (sizeof(struct dir_entry)));
+	if(!(num - 2)) {
+		iput(node);
+		return;
+	}
+
+	fm_maximum = 0;
+	fm_counter = 0;	
+	buff_head = bread(0x301,node->i_zone[0]);
+	den = (struct dir_entry *) buff_head->b_data;
+	
+	den++;
+	if(!strcmp(den->name,".."))
+		back = den->inode;
+	root = _root;
+	
+	for(i = 0; i < 10 && i < num - 1; i ++) {
+
+		if(den->name[0] == '.') {
+			den++;
+			continue;
+		}
+
+		struct m_inode *temp_node = iget(0x301,den->inode);
+
+
+		set_fm_color(temp_node->i_mode);
+		
+		for(j = 0; j < 14; j++) {
+			if(den->name[j] > 32 && den->name[j] < 127)
+				continue;
+			else {
+				den->name[j] = '\0';
+				break;
+			}
+			
+		}
+
+		memset(&fm_names[fm_counter][0],0,sizeof(fm_names[fm_counter]));
+		strcpy(fm_names[fm_counter],den->name);
+		
+		inodes[fm_counter] = den->inode;
+
+		draw_line(fm_names[fm_counter], fm_counter + 1, fm_colors[fm_counter]);
+
+		den++;	
+		fm_counter ++;
+		fm_maximum ++;
+		iput(temp_node);
+	}
+
+	iput(node);
+	brelse(buff_head);
+	fm_counter = 0;
+	draw_line(fm_names[fm_counter],fm_counter +1, fm_colors[fm_counter] + 0x80);
+
+}
+
+void set_fm_color(unsigned short i_mode) {
+
+	if(S_ISDIR(i_mode)) {
+		fm_colors[fm_counter] = 0x0B;
+	}
+	else if(S_ISCHR(i_mode)) {
+		fm_colors[fm_counter] = 0x06;
+	}
+	else if(S_IXUSR & i_mode) {
+		fm_colors[fm_counter] = 0x0A;
+	}
+	else if(S_ISREG(i_mode)) {
+		fm_colors[fm_counter] = 0x07;
+	}
+	
+}
+
 void fm_toggle(void) {
 	fm_flag = (fm_flag + 1) % 3;
 	clean_frame();
+	if(fm_flag == 0)
+		root = 1;
+
 	if(fm_flag != 0)
 		draw_frame();
-	if(fm_flag == 2)
+	if(fm_flag == 1) {
+		if(root == 1) {
+		fm_header[0] = '/';
+		fm_header[1] = '\0';
+		}
+		draw_fm(root);
+	}
+	else if(fm_flag == 2)
 		draw_clipboard();
+}
+
+
+
+int sys_clear(void) {
+	
+	int i;
+	for(i = 0; i < LINES; i++)
+	{
+		scrup();
+	}
+	gotoxy(0,0);
+	return 0;
+}
+
+int sys_echo_off(void) {
+	tty_table[0].termios.c_lflag &= ~ECHO;
+}
+
+int sys_echo_on(void) {
+	tty_table[0].termios.c_lflag |= ECHO;
 }

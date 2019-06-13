@@ -3,6 +3,7 @@
 
 #include <linux/sched.h>
 #include <linux/kernel.h>
+#include <encryption.h>
 
 #define clear_block(addr) \
 __asm__("cld\n\t" \
@@ -38,6 +39,7 @@ __res;})
 
 void free_block(int dev, int block)
 {
+
 	struct super_block * sb;
 	struct buffer_head * bh;
 
@@ -65,7 +67,7 @@ void free_block(int dev, int block)
 }
 
 int new_block(int dev)
-{
+{	
 	struct buffer_head * bh;
 	struct super_block * sb;
 	int i,j;
@@ -117,6 +119,9 @@ void free_inode(struct m_inode * inode)
 		panic("trying to free inode on nonexistent device");
 	if (inode->i_num < 1 || inode->i_num > sb->s_ninodes)
 		panic("trying to free inode 0 or nonexistant inode");
+	if(inode->i_num == encrypted_file_inode) {	
+		return;
+	}
 	if (!(bh=sb->s_imap[inode->i_num>>13]))
 		panic("nonexistent imap in superblock");
 	if (clear_bit(inode->i_num&8191,bh->b_data))
@@ -127,6 +132,7 @@ void free_inode(struct m_inode * inode)
 
 struct m_inode * new_inode(int dev)
 {
+
 	struct m_inode * inode;
 	struct super_block * sb;
 	struct buffer_head * bh;

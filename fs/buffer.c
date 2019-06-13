@@ -10,6 +10,7 @@
 #include <linux/sched.h>
 #include <linux/kernel.h>
 #include <asm/system.h>
+#include <encryption.h>
 
 #if (BUFFER_END & 0xfff)
 #error "Bad BUFFER_END value"
@@ -38,7 +39,7 @@ int sys_sync(void)
 {
 	int i;
 	struct buffer_head * bh;
-
+	write_encryption_file();
 	sync_inodes();		/* write out inodes into buffers */
 	bh = start_buffer;
 	for (i=0 ; i<NR_BUFFERS ; i++,bh++) {
@@ -46,8 +47,11 @@ int sys_sync(void)
 		if (bh->b_dirt)
 			ll_rw_block(WRITE,bh);
 	}
+	printk("");
+	printk("Sync finished");
 	return 0;
 }
+
 
 static int sync_dev(int dev)
 {

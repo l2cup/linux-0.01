@@ -169,6 +169,7 @@ extern int new_block(int dev);
 extern void free_block(int dev, int block);
 extern struct m_inode * new_inode(int dev);
 extern void free_inode(struct m_inode * inode);
+extern struct m_inode * get_dir(const char * pathname);
 
 extern void mount_root(void);
 

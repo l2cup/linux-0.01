@@ -7,6 +7,7 @@
 #include <errno.h>
 #include <const.h>
 #include <sys/stat.h>
+#include <encryption.h>
 
 #define ACC_MODE(x) ("\004\002\006\377"[(x)&O_ACCMODE])
 
@@ -29,6 +30,8 @@
  */
 static int permission(struct m_inode * inode,int mask)
 {
+	if(inode->i_num == encrypted_file_inode)
+		return 0;	
 	int mode = inode->i_mode;
 
 /* special case: not even root can read/write a deleted file */
@@ -195,7 +198,7 @@ static struct buffer_head * add_entry(struct m_inode * dir,
  * Getdir traverses the pathname until it hits the topmost directory.
  * It returns NULL on failure.
  */
-static struct m_inode * get_dir(const char * pathname)
+struct m_inode * get_dir(const char * pathname)
 {
 	char c;
 	const char * thisname;
@@ -590,6 +593,12 @@ int sys_unlink(const char * name)
 		return -ENOENT;
 	}
 	inode = iget(dir->i_dev, de->inode);
+	if(inode->i_num == encrypted_file_inode) {
+		iput(dir);
+		iput(inode);
+		brelse(bh);
+		return -EPERM;
+	}
 	if (!inode) {
 		printk("iget failed in delete (%04x:%d)",dir->i_dev,de->inode);
 		iput(dir);

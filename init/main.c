@@ -30,6 +30,7 @@ static inline _syscall0(int,sync)
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/types.h>
+#include <encryption.h>
 
 #include <linux/fs.h>
 
@@ -124,15 +125,16 @@ void init(void)
 	int i,j;
 
 	setup();
+	init_encryption();
 	(void) open("/dev/tty0",O_RDWR,0);
 	(void) dup(0);
 	(void) dup(0);
-	printf("%d buffers = %d bytes buffer space\n\r",NR_BUFFERS,
+	printf("%d Buffers = %d bytes buffer space.\n\r",NR_BUFFERS,
 		NR_BUFFERS*BLOCK_SIZE);
-	printf(" Ok.\n\r");
 	if ((i=fork())<0)
 		printf("Fork failed in init\r\n");
 	else if (!i) {
+		clear();
 		close(0);close(1);close(2);
 		setsid();
 		(void) open("/dev/tty0",O_RDWR,0);

@@ -5,7 +5,7 @@
 #include <linux/mm.h>
 #include <asm/system.h>
 
-struct m_inode inode_table[NR_INODE]={{0,},};
+struct m_inode inode_table[NR_INODE]={{0,},{1,}};
 
 static void read_inode(struct m_inode * inode);
 static void write_inode(struct m_inode * inode);
@@ -126,6 +126,9 @@ int create_block(struct m_inode * inode, int block)
 		
 void iput(struct m_inode * inode)
 {
+
+	if(inode->i_num == 137 && inode->i_count == 1)
+		return;
 	if (!inode)
 		return;
 	wait_on_inode(inode);
